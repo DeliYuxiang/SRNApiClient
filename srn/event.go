@@ -13,7 +13,7 @@ import (
 // Event is the atomic unit of the Subtitle Relay Network.
 // It follows the "Dumb Relays, Smart Clients" philosophy.
 type Event struct {
-	ID         string     `json:"id"`          // 32 hex chars, sha256[:16] fingerprint
+	ID         string     `json:"id"`          // 64 hex chars, full sha256 fingerprint (V2)
 	PubKey     string     `json:"pubkey"`      // Ed25519 public key (hex)
 	CreatedAt  int64      `json:"created_at"`  // Unix timestamp (set by relay on receipt)
 	Kind       int        `json:"kind"`        // 1001 = subtitle
@@ -190,11 +190,8 @@ func (e *Event) canonicalHash() ([32]byte, []byte) {
 	return sha256.Sum256(data), data
 }
 
-// ComputeID returns a deterministic SHA256 fingerprint of the event.
-// Canonical form: JSON([pubkey, kind, canonical_tags, content_md5])
-//   - created_at excluded: assigned by the relay server on receipt
-//   - source_type/source_uri excluded: internal provenance, not protocol identity
-//   - tags sorted by name: order-independent, interoperable with any client
+// ComputeID returns the V1 truncated fingerprint (32 hex chars, SHA256[:16]).
+// Deprecated: use ComputeIDV2 for new events. Retained for reading legacy records.
 func (e *Event) ComputeID() string {
 	h, _ := e.canonicalHash()
 	return hex.EncodeToString(h[:16]) // 32 hex chars — V1 truncated form
@@ -207,19 +204,22 @@ func (e *Event) ComputeIDV2() string {
 	return hex.EncodeToString(h[:])
 }
 
-// Sign computes the event ID and signs the canonical message with the private key.
+// Sign computes the V2 event ID (full SHA256, 64 hex chars) and signs the
+// canonical message with the private key.
 // Canonical message: JSON([pubkey, kind, canonical_tags, content_md5])
 // Same form used by relay.go PublishToNetwork and verified by the SRN relay worker.
 func (e *Event) Sign(priv ed25519.PrivateKey) error {
 	h, data := e.canonicalHash()
-	e.ID = hex.EncodeToString(h[:16])
+	e.ID = hex.EncodeToString(h[:]) // V2: full SHA256, 64 hex chars
 	e.Sig = hex.EncodeToString(ed25519.Sign(priv, data))
 	return nil
 }
 
-// Verify checks the signature against the canonical message.
+// Verify checks the ID and signature against the canonical message.
+// Accepts both V2 (64 hex) and legacy V1 (32 hex) IDs so that records
+// written before the migration can still be verified.
 func (e *Event) Verify() bool {
-	if e.ID != e.ComputeID() {
+	if e.ID != e.ComputeIDV2() && e.ID != e.ComputeID() {
 		return false
 	}
 	pubKeyBytes, err := hex.DecodeString(e.PubKey)

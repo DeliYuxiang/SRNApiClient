@@ -368,7 +368,7 @@ func PublishToNetwork(relayURLs []string, ev *Event, data []byte, privKey ed2551
 	}
 	ev.CreatedAt = time.Now().Unix()
 	ev.PubKey = hex.EncodeToString(privKey.Public().(ed25519.PublicKey))
-	ev.ID = ev.ComputeID()
+	ev.ID = ev.ComputeIDV2()
 
 	payload := &publishPayload{
 		ID:         ev.ID,

@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  test:
+  test-go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +16,20 @@ jobs:
           cache: true
       - run: go test ./...
 
+  test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: ts
+      - run: npm test
+        working-directory: ts
+
   release:
-    needs: test
+    needs: [test-go, test-ts]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -28,12 +40,39 @@ jobs:
         with:
           generate_release_notes: true
 
-  notify-dependents:
+  publish-ts:
     needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@deliyuxiang'
+      - run: npm ci
+        working-directory: ts
+      # Stamp the package version with the git tag (strips leading 'v')
+      - run: npm version "${{ github.ref_name }}" --no-git-tag-version --allow-same-version
+        working-directory: ts
+        env:
+          npm_config_git_tag_version: 'false'
+      - run: npm publish
+        working-directory: ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-dependents:
+    needs: publish-ts
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: [hijarr, feeder]
+        # Go consumers: update go.mod via go get
+        # TS consumers: update package.json via npm update
+        repo: [hijarr, feeder, srn, srnfrontend]
     steps:
       - name: Dispatch to ${{ matrix.repo }}
         uses: peter-evans/repository-dispatch@v3
