@@ -349,8 +349,8 @@ type publishPayload struct {
 	ContentMD5 string     `json:"content_md5"`
 	Filename   string     `json:"filename,omitempty"`
 	TmdbID     string     `json:"tmdb_id,omitempty"`
-	SeasonNum  int        `json:"season_num,omitempty"`
-	EpisodeNum int        `json:"episode_num,omitempty"`
+	SeasonNum  int        `json:"season_num"`
+	EpisodeNum int        `json:"episode_num"`
 	Language   string     `json:"language,omitempty"`
 	ArchiveMD5 string     `json:"archive_md5,omitempty"`
 	SourceType string     `json:"source_type,omitempty"`
